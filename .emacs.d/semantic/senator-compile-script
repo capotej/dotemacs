@@ -1,0 +1,5 @@
+(add-to-list 'load-path nil)
+(add-to-list 'load-path ".")
+(add-to-list 'load-path "/Users/capotej/.emacs.d/speedbar/")
+(add-to-list 'load-path "/Users/capotej/.emacs.d/eieio/")
+(setq debug-on-error t)
