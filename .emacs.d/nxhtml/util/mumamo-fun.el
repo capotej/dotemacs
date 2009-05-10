@@ -54,6 +54,25 @@
 (eval-when-compile (add-to-list 'load-path default-directory))
 (require 'mumamo)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; File wide key bindings
+
+(defun mumamo-multi-mode-map ()
+  "Return mumamo multi mode keymap."
+  (symbol-value
+   (intern-soft (concat (symbol-name mumamo-multi-major-mode) "-map"))))
+
+;; (defun mumamo-multi-mode-hook-symbol ()
+;;   "Return mumamo multi mode hook symbol."
+;;   (intern-soft (concat (symbol-name mumamo-multi-major-mode) "-hook")))
+
+(defun mumamo-define-html-file-wide-keys ()
+  (let ((map (mumamo-multi-mode-map)))
+    (define-key map [(control ?c) (control ?h) ?b] 'nxhtml-browse-file)
+    ))
+;; (defun mumamo-add-html-file-wide-keys (hook)
+;;   (add-hook hook 'mumamo-define-html-file-wide-keys)
+;;   )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Chunk search routines for XHTML things
@@ -212,18 +231,6 @@ POS is where to start search and MIN is where to stop."
     (mumamo-msgfntfy "  end-pos=%s" end-pos)
     (when end-pos
       (unless (or (mumamo-xml-pi-end-is-xml-end end-pos)
-;;;                   (progn
-;;;                     (save-restriction
-;;;                       (widen)
-;;;                       (message "not xml-end, end-pos=%s, cb=%s, char-after end-pos - 1=%s, point=%s, point-max=%s, sub=%s"
-;;;                                end-pos
-;;;                                (current-buffer)
-;;;                                (char-after (- end-pos 1))
-;;;                                (point)
-;;;                                (point-max)
-;;;                                (buffer-substring-no-properties (1- end-pos) end-pos)
-;;;                                ))
-;;;                     nil)
                   (= (save-restriction
                        (widen)
                        (char-after (- end-pos 1)))
@@ -250,7 +257,10 @@ of LT-CHARS see `mumamo-search-bw-exc-start-xml-pi-1'."
   (goto-char pos)
   (skip-chars-backward "a-zA-Z")
   ;;(let ((end-out (mumamo-chunk-start-fw-str (point) max lt-chars)))
-  (let ((end-out (mumamo-chunk-start-fw-str-inc (point) max lt-chars)))
+  (let ((end-out (mumamo-chunk-start-fw-str-inc (point) max lt-chars))
+        spec
+        exc-mode
+        hit)
     (when (looking-at "xml")
       (if t ;(= 1 pos)
           (setq end-out (mumamo-chunk-start-fw-str-inc (1+ (point)) max lt-chars))
@@ -258,10 +268,18 @@ of LT-CHARS see `mumamo-search-bw-exc-start-xml-pi-1'."
     (when end-out
       ;; Get end-out:
       (if (looking-at (rx (0+ (any "a-z"))))
-          ;;(setq end-out (match-end 0))
-          (setq end-out (- (match-beginning 0) 2))
-        (setq end-out nil)))
-    end-out))
+          (progn
+            ;;(setq end-out (match-end 0))
+            (setq end-out (- (match-beginning 0) 2))
+            (setq spec (match-string-no-properties 0))
+            (setq exc-mode (assoc spec mumamo-xml-pi-mode-alist))
+            (if exc-mode
+                (setq exc-mode (cdr exc-mode))
+              (setq exc-mode 'php-mode))
+            (setq end-out (list end-out exc-mode nil))
+            )
+        (setq end-out nil))
+      end-out)))
 
 (defun mumamo-search-fw-exc-start-xml-pi (pos max)
   "Helper for `mumamo-chunk-xml-pi'.
@@ -351,7 +369,9 @@ POS is where to start search and MIN is where to stop."
         (goto-char exc-start)
         (when (<= exc-start pos)
           ;;(cons (point) 'css-mode)
-          (list (point) 'css-mode '(nxml-mode))
+          ;;(list (point) 'css-mode '(nxml-mode))
+          ;; Fix-me: Kubica looping problem
+          (list (point) 'css-mode)
           )
         ))))
 
@@ -536,6 +556,7 @@ This covers inlined style and javascript and PHP."
     mumamo-chunk-style=
     mumamo-chunk-onjs=
     )))
+(add-hook 'html-mumamo-mode-hook 'mumamo-define-html-file-wide-keys)
 ;; (define-mumamo-multi-major-mode xml-pi-only-mumamo-mode
 ;;   "Test"
 ;;   ("HTML Family" html-mode
@@ -557,6 +578,7 @@ This covers inlined style and javascript and PHP."
       mumamo-chunk-style=
       mumamo-chunk-onjs=
       )))
+(add-hook 'nxml-mumamo-mode-hook 'mumamo-define-html-file-wide-keys)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

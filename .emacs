@@ -1,9 +1,41 @@
-(setq load-path (cons "~/.emacs.d/" load-path))
+(add-to-list 'load-path "~/.emacs.d/color-theme")
+(add-to-list 'load-path "~/.emacs.d/plugins")
+(require 'yasnippet-bundle)
+(add-to-list 'load-path "~/.emacs.d/scala")
+(require 'scala-mode-auto)
+(require 'dropdown-list)
+(add-to-list 'load-path "~/.emacs.d/ruby-mode")
+(add-to-list 'load-path "~/.emacs.d/rinari")
+(load "~/.emacs.d/cursor-chg.el")
 
+(add-to-list 'load-path "~/.emacs.d/egg")
+(require 'egg)
+
+(require 'rinari)
+
+(load "~/.emacs.d/nxhtml/autostart.el")
+     (setq
+      nxhtml-global-minor-mode t
+      mumamo-chunk-coloring 'submode-colored
+      nxhtml-skip-welcome t
+      indent-region-mode t
+      rng-nxml-auto-validate-flag nil
+      nxml-degraded t)
+     (add-to-list 'auto-mode-alist '("\\.html\\.erb\\'" . eruby-html-mumamo))
+
+
+
+
+(setq yas/text-popup-function
+      #'yas/dropdown-list-popup-for-template)
+
+(setq yas/window-system-popup-function
+      #'yas/dropdown-list-popup-for-template)
+
+(setq auto-save-default nil)
 (require 'color-theme)
 (color-theme-initialize)
 (color-theme-arjen)
-
 
 (autoload 'ruby-mode "ruby-mode" "Major mode for editing ruby scripts." t)
 (setq auto-mode-alist  (cons '(".rb$" . ruby-mode) auto-mode-alist))
@@ -53,7 +85,14 @@
 (ido-mode t)
 
 (custom-set-variables
- '(nxhtml-skip-welcome t))
+  ;; custom-set-variables was added by Custom.
+  ;; If you edit it by hand, you could mess it up, so be careful.
+  ;; Your init file should contain only one such instance.
+  ;; If there is more than one, they won't work right.
+ '(egg-git-command "/usr/local/git/bin/git")
+ '(nxhtml-skip-welcome t)
+ '(paren-match-face (quote paren-face-match-light))
+ '(paren-sexp-mode t))
 
 (if (fboundp 'scroll-bar-mode) (scroll-bar-mode -1))
 (if (fboundp 'tool-bar-mode) (tool-bar-mode -1))
@@ -61,3 +100,13 @@
 (transient-mark-mode)
 (setq make-backup-files nil)
 (setq inhibit-splash-screen t)
+(custom-set-faces
+  ;; custom-set-faces was added by Custom.
+  ;; If you edit it by hand, you could mess it up, so be careful.
+  ;; Your init file should contain only one such instance.
+  ;; If there is more than one, they won't work right.
+ '(default ((t (:stipple nil :background "black" :foreground "white" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 135 :width normal :family "apple-monaco")))))
+(global-set-key "\C-x\C-m" 'execute-extended-command)
+(global-set-key "\C-c\C-m" 'execute-extended-command)
+
+

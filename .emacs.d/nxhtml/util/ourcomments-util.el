@@ -44,7 +44,12 @@
 ;;
 ;;; Code:
 
-
+(eval-when-compile (require 'apropos))
+(eval-when-compile (require 'cl))
+(eval-when-compile (require 'grep))
+(eval-when-compile (require 'ido))
+;;(eval-when-compile (require 'mumamo))
+(eval-when-compile (require 'recentf))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Popups etc.
@@ -439,11 +444,24 @@ To create a menu item something similar to this can be used:
   "Move point to beginning of line or indentation.
 See `beginning-of-line' for ARG.
 
-If `physical-line-mode' is on then the visual line beginning is
-first tried."
+If `line-move-visual' is non-nil then the visual line beginning
+is first tried."
   (interactive "p")
-  (let ((pos (point)))
+  (let ((pos (point))
+        vis-pos)
+    (when line-move-visual
+      (line-move-visual -1 t)
+      (beginning-of-line)
+      (setq vis-pos (point))
+      (goto-char pos))
     (call-interactively 'beginning-of-line arg)
+    (when (and vis-pos
+               (= vis-pos (point)))
+      (while (and (> pos (point))
+                  (not (eobp)))
+        (let (last-command)
+          (line-move-visual 1 t)))
+      (line-move-visual -1 t))
     (when (= pos (point))
       (if (= 0 (current-column))
           (skip-chars-forward " \t")
@@ -453,15 +471,26 @@ first tried."
 
 ;;;###autoload
 (defun ourcomments-move-end-of-line(arg)
-  "Move point to end of line or indentation.
+  "Move point to end of line or after last non blank char.
 See `end-of-line' for ARG.
 
-If `physical-line-mode' is on then the visual line ending is
-first tried."
+Similar to `ourcomments-move-beginning-of-line' but for end of
+line."
   (interactive "p")
   (or arg (setq arg 1))
-  (let ((pos (point)))
+  (let ((pos (point))
+        vis-pos)
+    (when line-move-visual
+      (let (last-command) (line-move-visual 1 t))
+      (end-of-line)
+      (setq vis-pos (point))
+      (goto-char pos))
     (call-interactively 'end-of-line arg)
+    (when (and vis-pos
+               (= vis-pos (point)))
+      (beginning-of-line)
+      (let (last-command) (line-move-visual 1 t))
+      (backward-char))
     (when (= pos (point))
       (if (= (line-end-position) (point))
           (skip-chars-backward " \t")
@@ -543,6 +572,7 @@ for the keymap to be active \(minor mode levels only)."
         (maps (current-active-maps))
         map
         map-sym
+        map-rec
         binding
         keymaps
         minor-maps
@@ -646,6 +676,72 @@ for the keymap to be active \(minor mode levels only)."
 
     (nreverse bindings)))
 
+(defun describe-keymap-placement (keymap-sym)
+  "Find minor mode keymap KEYMAP-SYM in the keymaps searched for key lookup.
+See Info node `Searching Keymaps'."
+  ;;(info "(elisp) Searching Keymaps")
+  (interactive (list (ourcomments-read-symbol "Describe minor mode keymap symbol"
+                                              (lambda (sym)
+                                                (and (boundp sym)
+                                                     (keymapp (symbol-value sym)))))))
+  (unless (symbolp keymap-sym)
+    (error "Argument KEYMAP-SYM must be a symbol"))
+  (unless (keymapp (symbol-value keymap-sym))
+    (error "The value of argument KEYMAP-SYM must be a keymap"))
+  (with-output-to-temp-buffer (help-buffer)
+    (help-setup-xref (list #'describe-keymap-placement keymap-sym) (interactive-p))
+    (with-current-buffer (help-buffer)
+      (insert "Placement of keymap `")
+      (insert-text-button (symbol-name keymap-sym)
+                          'action
+                          (lambda (btn)
+                            (describe-variable keymap-sym)))
+      (insert "'\nin minor modes activation maps:\n")
+      (let (found)
+        (dolist (map-root '(emulation-mode-map-alists
+                            minor-mode-overriding-map-alist
+                            minor-mode-map-alist
+                            ))
+          (dolist (emul-alist (symbol-value map-root))
+            ;;(message "emul-alist=%s" emul-alist)
+            (dolist (keymap-alist
+                     (if (memq map-root '(emulation-mode-map-alists))
+                         (symbol-value emul-alist)
+                       (list emul-alist)))
+              (let* ((map (cdr keymap-alist))
+                     (first (catch 'first
+                              (map-keymap (lambda (key def)
+                                            (throw 'first (cons key def)))
+                                          map)))
+                     (key (car first))
+                     (def (cdr first))
+                     (keymap-variables (when (and key def)
+                                         (ourcomments-find-keymap-variables
+                                          (vector key) def map)))
+                     (active-var (car keymap-alist))
+                     )
+                (assert (keymapp map))
+                ;;(message "keymap-alist=%s, %s" keymap-alist first)
+                ;;(message "active-var=%s, %s" active-var keymap-variables)
+                (when (memq keymap-sym keymap-variables)
+                  (setq found t)
+                  (insert (format "\n`%s' " map-root))
+                  (insert (propertize "<= Minor mode keymap list holding this map"
+                                      'face 'font-lock-doc-face))
+                  (insert "\n")
+                  (when (symbolp emul-alist)
+                    (insert (format "  `%s' " emul-alist))
+                    (insert (propertize "<= Keymap alist variable" 'face 'font-lock-doc-face))
+                    (insert "\n"))
+                  ;;(insert (format "    `%s'\n" keymap-alist))
+                  (insert (format "      `%s' " active-var))
+                  (insert (propertize "<= Activation variable" 'face 'font-lock-doc-face))
+                  (insert "\n")
+                  )))))
+        (unless found
+          (insert (propertize "Not found." 'face 'font-lock-warning-face)))
+        ))))
+
 ;; This is a replacement for describe-key-briefly.
 ;;(global-set-key [f1 ?c] 'describe-key-and-map-briefly)
 ;;;###autoload
@@ -722,7 +818,6 @@ what they will do ;-)."
     ;; End of part from describe-key-briefly.
     ;; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
-    
     ;;(message "bindings=%s" (key-bindings key)) (sit-for 2)
     ;; Find the keymap:
     (let* ((maps (current-active-maps))
@@ -765,33 +860,6 @@ what they will do ;-)."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Wrapping
-
-;; Fix-me: There is a confusion between buffer and window margins
-;; here. Also the doc says that left-margin-width and dito right may
-;; be nil. However they seem to be 0 by default, but when displaying a
-;; buffer in a window then window-margins returns (nil).
-(defun wrap-to-fill-set-values ()
-  "Use `fill-column' display columns in buffer windows."
-  ;;(message "wrap-to-fill-set-values here")
-  (let ((buf-windows (get-buffer-window-list (current-buffer))))
-    (dolist (win buf-windows)
-      (if wrap-to-fill-column-mode
-          (let* ((edges (window-edges win))
-                 (win-width (- (nth 2 edges) (nth 0 edges)))
-                 (extra-width (- win-width fill-column))
-                 (left-marg (if wrap-to-fill-left-marg-use
-                                wrap-to-fill-left-marg-use
-                              (- (/ extra-width 2) 1)))
-                 (right-marg (- win-width fill-column left-marg))
-                 (win-margs (window-margins win))
-                 (old-left (or (car win-margs) 0))
-                 (old-right (or (cdr win-margs) 0)))
-            (unless (> left-marg 0) (setq left-marg 0))
-            (unless (> right-marg 0) (setq right-marg 0))
-            (unless (and (= old-left left-marg)
-                         (= old-right right-marg))
-              (set-window-margins win left-marg right-marg)))
-        (set-window-buffer win (current-buffer))))))
 
 ;;;###autoload
 (defcustom wrap-to-fill-left-marg nil
@@ -877,7 +945,24 @@ See the hook for WINDOW and START-POS."
         (max (window-end window t)))
     (wrap-to-fill-set-prefix min max)))
 
-(put 'wrap-to-fill-column-mode 'permanent-local t)
+(defun wrap-to-fill-wider ()
+  "Increase `fill-column' with 10."
+  (interactive)
+  (setq fill-column (+ fill-column 10))
+  (wrap-to-fill-set-values))
+
+(defun wrap-to-fill-narrower ()
+  "Decrease `fill-column' with 10."
+  (interactive)
+  (setq fill-column (- fill-column 10))
+  (wrap-to-fill-set-values))
+
+(defvar wrap-to-fill-column-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [(control ?c) right] 'wrap-to-fill-wider)
+    (define-key map [(control ?c) left] 'wrap-to-fill-narrower)
+    map))
+
 ;;;###autoload
 (define-minor-mode wrap-to-fill-column-mode
   "Use `fill-column' display columns in buffer windows.
@@ -889,7 +974,11 @@ is not reset when turning off this mode.
 
 Note 2: The text property `wrap-prefix' is set by this mode to
 indent continuation lines.  This is not recorded in the undo
-list."
+list.
+
+Key bindings added by this minor mode:
+
+\\{wrap-to-fill-column-mode-map}"
   ;; Fix-me: make the `wrap-prefix' behavior an option.
   :lighter " WrapFill"
   :group 'convenience
@@ -937,6 +1026,41 @@ list."
           '(wrap-to-fill-prefix)))
        (goto-char here))))
   (wrap-to-fill-set-values))
+(put 'wrap-to-fill-column-mode 'permanent-local t)
+
+;; Fix-me: There is a confusion between buffer and window margins
+;; here. Also the doc says that left-margin-width and dito right may
+;; be nil. However they seem to be 0 by default, but when displaying a
+;; buffer in a window then window-margins returns (nil).
+(defun wrap-to-fill-set-values ()
+  (condition-case err
+      (wrap-to-fill-set-values-1)
+    (error (message "ERROR wrap-to-fill-set-values-1: %s" (error-message-string err)))))
+
+(defun wrap-to-fill-set-values-1 ()
+  "Use `fill-column' display columns in buffer windows."
+  ;;(message "wrap-to-fill-set-values window-configuration-change-hook=%s, wrap-to-fill-column-mode=%s, cb=%s" window-configuration-change-hook wrap-to-fill-column-mode (current-buffer))
+  (let ((buf-windows (get-buffer-window-list (current-buffer))))
+    ;;(message "buf-windows=%s" buf-windows)
+    (dolist (win buf-windows)
+      (if wrap-to-fill-column-mode
+          (let* ((edges (window-edges win))
+                 (win-width (- (nth 2 edges) (nth 0 edges)))
+                 (extra-width (- win-width fill-column))
+                 (left-marg (if wrap-to-fill-left-marg-use
+                                wrap-to-fill-left-marg-use
+                              (- (/ extra-width 2) 1)))
+                 (right-marg (- win-width fill-column left-marg))
+                 (win-margs (window-margins win))
+                 (old-left (or (car win-margs) 0))
+                 (old-right (or (cdr win-margs) 0)))
+            ;;(message "left-marg=%s, right-marg=%s, old-left=%s, old-right=%s" left-marg right-marg old-left old-right)
+            (unless (> left-marg 0) (setq left-marg 0))
+            (unless (> right-marg 0) (setq right-marg 0))
+            (unless (and (= old-left left-marg)
+                         (= old-right right-marg))
+              (set-window-margins win left-marg right-marg)))
+        (set-window-buffer win (current-buffer))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -955,7 +1079,8 @@ list."
              bottom-right-angle bottom-right-angle
              bottom-left-angle bottom-left-angle
              ))
-          (indicators (copy-list fringe-indicator-alist)))
+          ;;(indicators (copy-list fringe-indicator-alist)))
+          (indicators (copy-sequence fringe-indicator-alist)))
       (setq indicators (assq-delete-all 'bottom indicators))
       (set-default 'fringe-indicator-alist (cons better indicators)))))
 
@@ -1031,7 +1156,9 @@ and go to the same line number as in the current buffer."
          source-file
          installed-file
          other-file
-         (line-num (line-number-at-pos)))
+         (line-num (save-restriction
+                     (widen)
+                     (line-number-at-pos))))
     (cond
      ((and relative-installed
            (not (string= name-nondir relative-installed))
@@ -1090,9 +1217,8 @@ This is used in EmacsW32 in the file ediff.cmd."
            "oldXMenu/ChangeLog"
            "src/ChangeLog"
            "test/ChangeLog"))
-        )
-    (emacs-root (expand-file-name ".." exec-directory)
-    )))
+	(emacs-root (expand-file-name ".." exec-directory)
+        ))))
 
 (defun ourcomments-read-symbol (prompt predicate)
   "Basic function for reading a symbol for describe-* functions.
@@ -1440,7 +1566,8 @@ function."
                      disable)
   "Add C-tab to ido buffer completion."
   (ourcomments-ido-mode-advice)
-  ad-return-value)
+  ;;ad-return-value
+  )
 ;; (ad-activate 'ido-mode)
 ;; (ad-deactivate 'ido-mode)
 
@@ -1460,6 +1587,19 @@ function."
 
 (defvar ourcomments-ido-old-state ido-mode)
 
+(defun ourcomments-ido-ctrl-tab-activate ()
+  ;;(ad-update 'ido-visit-buffer)
+  (ad-enable-advice 'ido-visit-buffer 'before
+                    'ourcomments-ido-visit-buffer-other)
+  (ad-activate 'ido-visit-buffer)
+  ;;(ad-update 'ido-mode)
+  (ad-enable-advice 'ido-mode 'after
+                    'ourcomments-ido-add-ctrl-tab)
+  (ad-activate 'ido-mode)
+  (setq ourcomments-ido-old-state ido-mode)
+  (ido-mode (or ido-mode 'buffer)))
+
+;;;###autoload
 (defcustom ourcomments-ido-ctrl-tab nil
   "Enable buffer switching using C-Tab with function `ido-mode'.
 This changes buffer switching with function `ido-mode' the
@@ -1480,18 +1620,7 @@ of those in for example common web browsers."
   :set (lambda (sym val)
          (set-default sym val)
          (if val
-             (progn
-               (ad-activate 'ido-visit-buffer)
-               (ad-update 'ido-visit-buffer)
-               (ad-enable-advice 'ido-visit-buffer 'before
-                                 'ourcomments-ido-visit-buffer-other)
-               (ad-activate 'ido-mode)
-               (ad-update 'ido-mode)
-               (ad-enable-advice 'ido-mode 'after
-                                 'ourcomments-ido-add-ctrl-tab)
-               (setq ourcomments-ido-old-state ido-mode)
-               (ido-mode (or ido-mode 'buffer))
-               )
+             (ourcomments-ido-ctrl-tab-activate)
            (ad-disable-advice 'ido-visit-buffer 'before
                               'ourcomments-ido-visit-buffer-other)
            (ad-disable-advice 'ido-mode 'after
@@ -1499,9 +1628,9 @@ of those in for example common web browsers."
            ;; For some reason this little complicated construct is
            ;; needed. If they are not there the defadvice
            ;; disappears. Huh.
-           (if ourcomments-ido-old-state
-               (ido-mode ourcomments-ido-old-state)
-             (when ido-mode (ido-mode -1)))
+           ;;(if ourcomments-ido-old-state
+           ;;    (ido-mode ourcomments-ido-old-state)
+           ;;  (when ido-mode (ido-mode -1)))
            ))
   :group 'emacsw32
   :group 'convenience)
@@ -1510,8 +1639,12 @@ of those in for example common web browsers."
 ;;;; New Emacs instance
 
 (defun ourcomments-find-emacs ()
-  (let ((exec-path (list exec-directory)))
-    (executable-find "emacs")))
+  (locate-file invocation-name
+               (list invocation-directory)
+               exec-suffixes
+               ;; 1 ;; Fix-me: This parameter is depreceated, but used
+               ;; in executable-find, why?
+               ))
 
 ;;;###autoload
 (defun emacs()
@@ -1553,8 +1686,10 @@ If there is no buffer file start with `dired'."
 (defun emacs-Q-nxhtml()
   "Start new Emacs with -Q and load nXhtml."
   (interactive)
-  (let ((autostart (expand-file-name "../../EmacsW32/nxhtml/autostart.el"
-                                     exec-directory)))
+  (let ((autostart (if (boundp 'nxhtml-install-dir)
+                       (expand-file-name "autostart.el" nxhtml-install-dir)
+                     (expand-file-name "../../EmacsW32/nxhtml/autostart.el"
+                                       exec-directory))))
     (call-process (ourcomments-find-emacs) nil 0 nil "-Q"
                   "--debug-init"
                   "--load" autostart
@@ -1630,10 +1765,10 @@ This runs `query-replace-regexp' in selected files.
 See `dired-do-query-replace-regexp' for DELIMETED and more
 information."
   (interactive (dir-replace-read-parameters nil nil))
-  (message "%s" (list from to file-regexp root delimited))
+  (message "%s" (list from to files dir delimited))
   ;;(let ((files (directory-files root nil file-regexp))) (message "files=%s" files))
   (tags-query-replace from to delimited
-                      `(directory-files ,root t ,file-regexp)))
+                      `(directory-files ,dir t ,files)))
 
 (defun rdir-query-replace (from to file-regexp root &optional delimited)
   "Replace FROM with TO in FILES in directory tree ROOT.
