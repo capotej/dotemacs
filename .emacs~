@@ -4,12 +4,14 @@
 (add-to-list 'load-path "~/.emacs.d/scala")
 (require 'scala-mode-auto)
 (require 'dropdown-list)
-
+(add-to-list 'load-path "~/.emacs.d/ruby-mode")
 (add-to-list 'load-path "~/.emacs.d/rinari")
+(load "~/.emacs.d/cursor-chg.el")
+
+(add-to-list 'load-path "~/.emacs.d/egg")
+(require 'egg)
+
 (require 'rinari)
-
-(ido-mode)
-
 
 (load "~/.emacs.d/nxhtml/autostart.el")
      (setq
@@ -19,7 +21,7 @@
       indent-region-mode t
       rng-nxml-auto-validate-flag nil
       nxml-degraded t)
-     (add-to-list 'auto-mode-alist '("\\.html\\.erb\\'" . eruby-nxhtml-mumamo))
+     (add-to-list 'auto-mode-alist '("\\.html\\.erb\\'" . eruby-html-mumamo))
 
 
 
@@ -87,20 +89,23 @@
   ;; If you edit it by hand, you could mess it up, so be careful.
   ;; Your init file should contain only one such instance.
   ;; If there is more than one, they won't work right.
- '(nxhtml-skip-welcome t))
+ '(egg-git-command "/usr/bin/git")
+ '(nxhtml-skip-welcome t)
+ '(paren-match-face (quote paren-face-match-light))
+ '(paren-sexp-mode t))
 
 (if (fboundp 'scroll-bar-mode) (scroll-bar-mode -1))
 (if (fboundp 'tool-bar-mode) (tool-bar-mode -1))
-(if (fboundp 'menu-bar-mode) (menu-bar-mode -1))
+(if (fboundp 'menu-bar-mode) (menu-bar-mode 1)
 (transient-mark-mode)
 (setq make-backup-files nil)
 (setq inhibit-splash-screen t)
-(custom-set-faces
+;(custom-set-faces
   ;; custom-set-faces was added by Custom.
   ;; If you edit it by hand, you could mess it up, so be careful.
   ;; Your init file should contain only one such instance.
   ;; If there is more than one, they won't work right.
- '(default ((t (:stipple nil :background "black" :foreground "white" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 135 :width normal :family "apple-monaco")))))
+; '(default ((t (:stipple nil :background "black" :foreground "white" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 110 :width normal :family "apple-monaco")))))
 (global-set-key "\C-x\C-m" 'execute-extended-command)
 (global-set-key "\C-c\C-m" 'execute-extended-command)
 

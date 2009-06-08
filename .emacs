@@ -13,17 +13,22 @@
 
 (require 'rinari)
 
-(load "~/.emacs.d/nxhtml/autostart.el")
-     (setq
-      nxhtml-global-minor-mode t
-      mumamo-chunk-coloring 'submode-colored
-      nxhtml-skip-welcome t
-      indent-region-mode t
-      rng-nxml-auto-validate-flag nil
-      nxml-degraded t)
-     (add-to-list 'auto-mode-alist '("\\.html\\.erb\\'" . eruby-html-mumamo))
+;(load "~/.emacs.d/nxhtml/autostart.el")
+ ;    (setq
+ ;     nxhtml-global-minor-mode t
+ ;     mumamo-chunk-coloring 'submode-colored
+ ;     nxhtml-skip-welcome t
+ ;     indent-region-mode t
+ ;     rng-nxml-auto-validate-flag nil
+ ;     nxml-degraded t)
+ ;    (add-to-list 'auto-mode-alist '("\\.html\\.erb\\'" . eruby-html-mumamo))
 
+(defun fullscreen ()
+  (interactive)
+  (set-frame-parameter nil 'fullscreen
+		       (if (frame-parameter nil 'fullscreen) nil 'fullboth)))
 
+(global-set-key [f11] 'fullscreen)
 
 
 (setq yas/text-popup-function
@@ -89,7 +94,7 @@
   ;; If you edit it by hand, you could mess it up, so be careful.
   ;; Your init file should contain only one such instance.
   ;; If there is more than one, they won't work right.
- '(egg-git-command "/usr/local/git/bin/git")
+ '(egg-git-command "/usr/bin/git")
  '(nxhtml-skip-welcome t)
  '(paren-match-face (quote paren-face-match-light))
  '(paren-sexp-mode t))
@@ -100,12 +105,12 @@
 (transient-mark-mode)
 (setq make-backup-files nil)
 (setq inhibit-splash-screen t)
-(custom-set-faces
+;(custom-set-faces
   ;; custom-set-faces was added by Custom.
   ;; If you edit it by hand, you could mess it up, so be careful.
   ;; Your init file should contain only one such instance.
   ;; If there is more than one, they won't work right.
- '(default ((t (:stipple nil :background "black" :foreground "white" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 135 :width normal :family "apple-monaco")))))
+; '(default ((t (:stipple nil :background "black" :foreground "white" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 110 :width normal :family "apple-monaco")))))
 (global-set-key "\C-x\C-m" 'execute-extended-command)
 (global-set-key "\C-c\C-m" 'execute-extended-command)
 
